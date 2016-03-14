@@ -1,3 +1,5 @@
+import strutils
+
 import nimx.button
 import nimx.context
 import nimx.font
@@ -23,7 +25,19 @@ const VIEWPORT_SIZE* = newSize(320, 200)
 
 import wad.doomdata
 
+type MenuItem = ref object
+    pic: string
+    selected: bool
+    subMenu: seq[MenuItem]
+
+proc newMenuItem(pic: string, subMenu: seq[MenuItem]): MenuItem =
+    result.new
+    result.pic = pic
+    result.selected = false
+    result.subMenu = subMenu
+
 type MenuView* = ref object of SceneView
+    mainMenu*: seq[MenuItem]
     img*: Image
     imgpos*: Rect
     gameData: DoomData
@@ -32,12 +46,32 @@ proc newMenuView*(r: Rect, gameData: DoomData): MenuView =
     result.new
     result.gameData = gameData
 
+    result.mainMenu = @[
+        newMenuItem("M_NGAME",  @[]),
+        newMenuItem("M_OPTION", @[]),
+        newMenuItem("M_LOADG",  @[]),
+        newMenuItem("M_SAVEG",  @[]),
+        newMenuItem("M_QUITG",  @[])
+    ]
+
     let doomPic = result.gameData.pictures["TITLEPIC"]
     let img = imageWithDoomPicture(doomPic, result.gameData.palettes[0])
     result.img = img
     result.imgpos = newRect(doomPic.leftOffset.Coord, doomPic.topOffset.Coord, doomPic.width.Coord, doomPic.height.Coord)
 
     result.init(r)
+
+proc createDoomMenu*(v: MenuView, n: Node, rootItem: MenuItem = nil): Node =
+    result = newNode("menu")
+    var y: Coord = 72
+    if rootItem.isNil:
+        for item in v.mainMenu:
+            let itemNode = result.newChild(item.pic)
+            let itemImage = imageWithDoomPicture(v.gameData.pictures[item.pic], v.gameData.palettes[0])
+            itemNode.translation = newVector3(VIEWPORT_SIZE.width / 2 - 63, y, 0)
+            y += itemImage.size.height.Coord + 1
+            let itemSprite = itemNode.component(Sprite)
+            itemSprite.image = itemImage
 
 method init(v: MenuView, r: Rect) =
 
@@ -54,9 +88,18 @@ method init(v: MenuView, r: Rect) =
         let logicalWidth = bounds.width / (bounds.height / VIEWPORT_SIZE.height)
         mat.ortho(-logicalWidth / 2, logicalWidth / 2, VIEWPORT_SIZE.height / 2, -VIEWPORT_SIZE.height / 2, camera.zNear, camera.zFar)
 
-    let back = v.rootNode.newChild("background")
-    let backs = back.component(Sprite)
-    backs.image = v.img
+    let bgNode = v.rootNode.newChild("pic_TITLEPIC")
+    let bgDoomPic = v.gameData.pictures["TITLEPIC"]
+    let bgSprite = bgNode.component(Sprite)
+    bgSprite.image = imageWithDoomPicture(bgDoomPic, v.gameData.palettes[0])
+
+    let logoNode = v.rootNode.newChild("pic_M_DOOM")
+    let logoDoomPic = v.gameData.pictures["M_DOOM"]
+    logoNode.translation = newVector3(VIEWPORT_SIZE.width / 2 - logoDoomPic.width / 2 - 2, 3, 0)
+    let logoSprite = logoNode.component(Sprite)
+    logoSprite.image = imageWithDoomPicture(logoDoomPic, v.gameData.palettes[0])
+
+    v.rootNode.addChild(v.createDoomMenu(v.rootNode))
 
     v.setNeedsDisplay()
 
