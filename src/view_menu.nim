@@ -3,6 +3,7 @@ import strutils
 import nimx.button
 import nimx.context
 import nimx.font
+import nimx.event
 import nimx.image
 import nimx.types
 import nimx.view
@@ -44,12 +45,37 @@ type MenuView* = ref object of SceneView
     gameData: DoomData
     cursor*: Node
 
+proc newNodeWithDoomPic(v: MenuView, name: string, parent: Node, pic: string, x: Coord = 0, y: Coord = 0, center: bool = false): Node =
+    result = parent.newChild(name)
+    let nodeImage = imageWithDoomPicture(v.gameData.pictures[pic], v.gameData.palettes[0])
+    result.translation = newVector3(x + (if center: VIEWPORT_SIZE.width / 2 - nodeImage.size.width / 2 else: 0).Coord, y, 0)
+    let nodeSprite = result.component(Sprite)
+    nodeSprite.image = nodeImage
+
+proc newAnimatedNodeWithDoomPic(v: MenuView, name: string, parent: Node, pics: seq[string], frameRate: int, x: Coord = 0, y: Coord = 0, center: bool = false): Node =
+    result = parent.newChild(name)
+    var frames: seq[Image] = @[]
+    for pic in pics: frames.add(imageWithDoomPicture(v.gameData.pictures[pic], v.gameData.palettes[0]))
+    let nodeImage = newAnimatedImageWithImageSeq(frames)
+
+    let nodeSprite = result.component(Sprite)
+    nodeSprite.image = nodeImage
+
+    result.translation = newVector3(x + (if center: VIEWPORT_SIZE.width / 2 - nodeImage.size.width / 2 else: 0).Coord, y, 0)
+    result.sceneView().addAnimation(nodeImage.frameAnimation(frameRate))
+
 proc newMenuView*(r: Rect, gameData: DoomData): MenuView =
     result.new
     result.gameData = gameData
 
     result.mainMenu = @[
-        newMenuItem("M_NGAME",  @[], true),
+        newMenuItem("M_NGAME",  @[
+            newMenuItem("M_JKILL", @[], true),
+            newMenuItem("M_ROUGH", @[]      ),
+            newMenuItem("M_HURT",  @[]      ),
+            newMenuItem("M_ULTRA", @[]      ),
+            newMenuItem("M_NMARE", @[]      )
+        ], true),
         newMenuItem("M_OPTION", @[]),
         newMenuItem("M_LOADG",  @[]),
         newMenuItem("M_SAVEG",  @[]),
@@ -58,31 +84,22 @@ proc newMenuView*(r: Rect, gameData: DoomData): MenuView =
 
 proc createDoomMenu*(v: MenuView, n: Node, rootItem: MenuItem = nil): Node =
     result = n.newChild("Menu")
+    discard v.newNodeWithDoomPic("Logo", result, "M_DOOM", -2, 3, center=true)
     var y: Coord = 72
     if rootItem.isNil:
         for item in v.mainMenu:
-            let itemNode = result.newChild(item.pic)
-            let itemImage = imageWithDoomPicture(v.gameData.pictures[item.pic], v.gameData.palettes[0])
-            itemNode.translation = newVector3(VIEWPORT_SIZE.width / 2 - 63, y, 0)
-            y += itemImage.size.height.Coord + 1
-            let itemSprite = itemNode.component(Sprite)
-            itemSprite.image = itemImage
-
+            let itemNode = v.newNodeWithDoomPic(item.pic, result, item.pic, VIEWPORT_SIZE.width / 2 - 63, y.Coord, false)
+            y += itemNode.component(Sprite).image.size.height.Coord + 1
             if item.selected == true:
-                v.cursor = result.newChild("Cursor")
-                let cursorFrames = @[
-                    imageWithDoomPicture(v.gameData.pictures["M_SKULL1"], v.gameData.palettes[0]),
-                    imageWithDoomPicture(v.gameData.pictures["M_SKULL2"], v.gameData.palettes[0])
-                ]
-                let cursorAnimImage = newAnimatedImageWithImageSeq(cursorFrames)
-                v.cursor.translation = newVector3(itemNode.translation.x - 32, y - itemImage.size.height.Coord - 5, 0)
+                v.cursor = v.newAnimatedNodeWithDoomPic(
+                    "Cursor",
+                    result,
+                    @["M_SKULL1", "M_SKULL2"], 4,
+                    itemNode.translation.x - 32, y - itemNode.component(Sprite).image.size.height.Coord - 5
+                )
 
-                let cursorSprite = v.cursor.component(Sprite)
-                cursorSprite.image = cursorAnimImage
-
-                let cursorAnimation = cursorAnimImage.frameAnimation(desiredFramerate=4)
-
-                result.sceneView().addAnimation(cursorAnimation)
+method onKeyUp*(v: MenuView, e: var Event): bool =
+    discard
 
 method init(v: MenuView, r: Rect) =
 
@@ -99,17 +116,7 @@ method init(v: MenuView, r: Rect) =
         let logicalWidth = bounds.width / (bounds.height / VIEWPORT_SIZE.height)
         mat.ortho(-logicalWidth / 2, logicalWidth / 2, VIEWPORT_SIZE.height / 2, -VIEWPORT_SIZE.height / 2, camera.zNear, camera.zFar)
 
-    let bgNode = v.rootNode.newChild("TITLEPIC")
-    let bgDoomPic = v.gameData.pictures["TITLEPIC"]
-    let bgSprite = bgNode.component(Sprite)
-    bgSprite.image = imageWithDoomPicture(bgDoomPic, v.gameData.palettes[0])
-
-    let logoNode = v.rootNode.newChild("M_DOOM")
-    let logoDoomPic = v.gameData.pictures["M_DOOM"]
-    logoNode.translation = newVector3(VIEWPORT_SIZE.width / 2 - logoDoomPic.width / 2 - 2, 3, 0)
-    let logoSprite = logoNode.component(Sprite)
-    logoSprite.image = imageWithDoomPicture(logoDoomPic, v.gameData.palettes[0])
-
+    discard v.newNodeWithDoomPic("Background", v.rootNode, "TITLEPIC", 0, 0)
     discard v.createDoomMenu(v.rootNode)
 
     v.setNeedsDisplay()
