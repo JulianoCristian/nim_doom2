@@ -25,12 +25,18 @@ proc startApplication() =
         mainWindow = newWindow(newRect(120, 120, 320, 200))
 
     mainWindow.title = "Doom2: Hell on Earth"
+    mainWindow.enableAnimation(true)
 
     loadResourceAsync "Doom2.wad" proc(s: Stream) =
         let gameData = newDoomData(s)
         let menuView = newMenuView(newRect(0, 0, 320, 200), gameData)
         menuView.autoresizingMask = { afFlexibleMaxX, afFlexibleMaxY, afFlexibleWidth, afFlexibleHeight }
+
         mainWindow.addSubview(menuView)
+
+        menuView.init(newRect(0, 0, 320, 200))
+
+        mainWindow.runAnimations()
 
 when defined js:
     import dom
