@@ -5,6 +5,7 @@ import nimx.context
 import nimx.font
 import nimx.event
 import nimx.image
+import nimx.keyboard
 import nimx.types
 import nimx.view
 import nimx.window
@@ -40,6 +41,8 @@ proc newMenuItem(pic: string, subMenu: seq[MenuItem], selected: bool = false): M
 
 type MenuView* = ref object of SceneView
     mainMenu*: seq[MenuItem]
+    mainMenuRoot*: MenuItem
+    mainMenuCursor: int
     img*: Image
     imgpos*: Rect
     gameData: DoomData
@@ -82,24 +85,31 @@ proc newMenuView*(r: Rect, gameData: DoomData): MenuView =
         newMenuItem("M_QUITG",  @[])
     ]
 
-proc createDoomMenu*(v: MenuView, n: Node, rootItem: MenuItem = nil): Node =
+proc createDoomMenu*(v: MenuView, n: Node): Node =
     result = n.newChild("Menu")
-    discard v.newNodeWithDoomPic("Logo", result, "M_DOOM", -2, 3, center=true)
+    discard v.newNodeWithDoomPic("Logo", v.SceneView.rootNode, "M_DOOM", -2, 3, center=true)
     var y: Coord = 72
-    if rootItem.isNil:
-        for item in v.mainMenu:
-            let itemNode = v.newNodeWithDoomPic(item.pic, result, item.pic, VIEWPORT_SIZE.width / 2 - 63, y.Coord, false)
-            y += itemNode.component(Sprite).image.size.height.Coord + 1
-            if item.selected == true:
-                v.cursor = v.newAnimatedNodeWithDoomPic(
-                    "Cursor",
-                    result,
-                    @["M_SKULL1", "M_SKULL2"], 4,
-                    itemNode.translation.x - 32, y - itemNode.component(Sprite).image.size.height.Coord - 5
-                )
+    for index, item in if v.mainMenuRoot.isNil: v.mainMenu else: v.mainMenuRoot.subMenu:
+        let itemNode = v.newNodeWithDoomPic(item.pic, result, item.pic, VIEWPORT_SIZE.width / 2 - 63, y.Coord, false)
+        y += itemNode.component(Sprite).image.size.height.Coord + 1
+        if index == v.mainMenuCursor:
+            v.cursor = v.newAnimatedNodeWithDoomPic(
+                "Cursor",
+                v.SceneView.rootNode,
+                @["M_SKULL1", "M_SKULL2"], 4,
+                itemNode.translation.x - 32, y - itemNode.component(Sprite).image.size.height.Coord - 5
+            )
 
-method onKeyUp*(v: MenuView, e: var Event): bool =
-    discard
+method onKeyDown*(v: MenuView, e: var Event): bool =
+    let menuLen = (if not v.mainMenuRoot.isNil: v.mainMenuRoot.subMenu.len else: v.mainMenu.len)
+    if e.keyCode == VirtualKey.Down:
+        v.mainMenuCursor = (v.mainMenuCursor + 1) mod menuLen
+        v.SceneView.rootNode.findNode("Cursor").translation.y = v.SceneView.rootNode.findNode("Menu").children[v.mainMenuCursor].translation.y - 5
+        return true
+    elif e.keyCode == VirtualKey.Up:
+        v.mainMenuCursor = (menuLen + v.mainMenuCursor - 1) mod menuLen
+        v.SceneView.rootNode.findNode("Cursor").translation.y = v.SceneView.rootNode.findNode("Menu").children[v.mainMenuCursor].translation.y - 5
+        return true
 
 method init(v: MenuView, r: Rect) =
 
@@ -118,6 +128,8 @@ method init(v: MenuView, r: Rect) =
 
     discard v.newNodeWithDoomPic("Background", v.rootNode, "TITLEPIC", 0, 0)
     discard v.createDoomMenu(v.rootNode)
+
+    discard v.makeFirstResponder()
 
     v.setNeedsDisplay()
 

@@ -4,10 +4,7 @@ import wad.doomdata
 
 proc imageWithDoomPicture*(p: Picture, pal: Palette): Image =
     ## Construct new image with Doom picture
-    #var bitmap: string #
     var bitmap = cast[cstring](alloc0(p.width.int * p.height.int * 4 * sizeof(uint8)))
-    # bitmap.setLen(p.width * p.height * 4)
-    echo p.leftOffset, " TOP ", p.topOffset
     for colindex, col in p.columns:
         for post in col.posts:
             for index in 0 ..< post.colors.len:
