@@ -32,12 +32,14 @@ type MenuItem = ref object
     pic: string
     selected: bool
     subMenu: seq[MenuItem]
+    action: proc()
 
-proc newMenuItem(pic: string, subMenu: seq[MenuItem], selected: bool = false): MenuItem =
+proc newMenuItem(pic: string, subMenu: seq[MenuItem], selected: bool = false, action: proc() = nil): MenuItem =
     result.new
     result.pic = pic
     result.selected = selected
     result.subMenu = subMenu
+    result.action = action
 
 type MenuView* = ref object of SceneView
     mainMenu*: seq[MenuItem]
@@ -79,18 +81,34 @@ proc newMenuView*(r: Rect, gameData: DoomData): MenuView =
             newMenuItem("M_ULTRA", @[]      ),
             newMenuItem("M_NMARE", @[]      )
         ], true),
-        newMenuItem("M_OPTION", @[]),
-        newMenuItem("M_LOADG",  @[]),
-        newMenuItem("M_SAVEG",  @[]),
-        newMenuItem("M_QUITG",  @[])
+        newMenuItem("M_OPTION", @[
+            newMenuItem("M_ENDGAM", @[], true)
+        ]),
+        newMenuItem("M_LOADG",  @[
+            newMenuItem("M_ENDGAM", @[], true)
+        ]),
+        newMenuItem("M_SAVEG",  @[
+            newMenuItem("M_ENDGAM", @[], true)
+        ]),
+        newMenuItem("M_QUITG",  @[], action = proc() =
+            echo gameData.exitText.toString()
+            quit(0)
+        )
     ]
 
-proc createDoomMenu*(v: MenuView, n: Node): Node =
-    result = n.newChild("Menu")
-    discard v.newNodeWithDoomPic("Logo", v.SceneView.rootNode, "M_DOOM", -2, 3, center=true)
+proc createDoomMenu*(v: MenuView, n: Node, shiftLeft: Coord = 63): Node =
+    result = n.findNode("Menu")
     var y: Coord = 72
+
+    if v.mainMenuRoot.isNil:
+        discard v.newNodeWithDoomPic("Logo", v.SceneView.rootNode, "M_DOOM", -2, 3, center=true)
+
+    if v.mainMenuRoot == v.mainMenu[0]:
+        discard v.newNodeWithDoomPic("New Game Label", v.SceneView.rootNode, "M_NGAME", 0, 10, center=true)
+        discard v.newNodeWithDoomPic("Choose Skill Level", v.SceneView.rootNode, "M_SKILL", 10, 40, center=true)
+
     for index, item in if v.mainMenuRoot.isNil: v.mainMenu else: v.mainMenuRoot.subMenu:
-        let itemNode = v.newNodeWithDoomPic(item.pic, result, item.pic, VIEWPORT_SIZE.width / 2 - 63, y.Coord, false)
+        let itemNode = v.newNodeWithDoomPic(item.pic, result, item.pic, VIEWPORT_SIZE.width / 2 - shiftLeft, y.Coord, false)
         y += itemNode.component(Sprite).image.size.height.Coord + 1
         if index == v.mainMenuCursor:
             v.cursor = v.newAnimatedNodeWithDoomPic(
@@ -99,6 +117,19 @@ proc createDoomMenu*(v: MenuView, n: Node): Node =
                 @["M_SKULL1", "M_SKULL2"], 4,
                 itemNode.translation.x - 32, y - itemNode.component(Sprite).image.size.height.Coord - 5
             )
+
+proc clearDoomMenu(v: MenuView) =
+    v.mainMenuCursor = 0
+    v.SceneView.rootNode.findNode("Menu").removeAllChildren()
+
+    var nodesToRemove: seq[Node] = @[
+        v.SceneView.rootNode.findNode("Cursor"),
+        v.SceneView.rootNode.findNode("Logo"),
+        v.SceneView.rootNode.findNode("New Game Label"),
+        v.SceneView.rootNode.findNode("Choose Skill Level")
+    ]
+    for node in nodesToRemove:
+        if node.isNil: continue else: node.removeFromParent()
 
 method onKeyDown*(v: MenuView, e: var Event): bool =
     let menuLen = (if not v.mainMenuRoot.isNil: v.mainMenuRoot.subMenu.len else: v.mainMenu.len)
@@ -110,6 +141,26 @@ method onKeyDown*(v: MenuView, e: var Event): bool =
         v.mainMenuCursor = (menuLen + v.mainMenuCursor - 1) mod menuLen
         v.SceneView.rootNode.findNode("Cursor").translation.y = v.SceneView.rootNode.findNode("Menu").children[v.mainMenuCursor].translation.y - 5
         return true
+    elif e.keyCode == VirtualKey.Return:
+        if not v.mainMenuRoot.isNil:
+            if v.mainMenuRoot.subMenu[v.mainMenuCursor].action != nil:
+                v.mainMenuRoot.subMenu[v.mainMenuCursor].action()
+                return true
+        elif v.mainMenuRoot.isNil:
+            if v.mainMenu[v.mainMenuCursor].action != nil:
+                v.mainMenu[v.mainMenuCursor].action()
+                return true
+        if v.mainMenuRoot.isNil: v.mainMenuRoot = v.mainMenu[v.mainMenuCursor]
+        v.clearDoomMenu()
+        discard v.createDoomMenu(v.rootNode, shiftLeft = 112)
+        return true
+    elif e.keyCode == VirtualKey.Backspace:
+        if not v.mainMenuRoot.isNil:
+            v.mainMenuRoot = nil
+            v.clearDoomMenu()
+            discard v.createDoomMenu(v.rootNode)
+        return true
+
 
 method init(v: MenuView, r: Rect) =
 
@@ -127,6 +178,7 @@ method init(v: MenuView, r: Rect) =
         mat.ortho(-logicalWidth / 2, logicalWidth / 2, VIEWPORT_SIZE.height / 2, -VIEWPORT_SIZE.height / 2, camera.zNear, camera.zFar)
 
     discard v.newNodeWithDoomPic("Background", v.rootNode, "TITLEPIC", 0, 0)
+    discard v.rootNode.newChild("Menu")
     discard v.createDoomMenu(v.rootNode)
 
     discard v.makeFirstResponder()
