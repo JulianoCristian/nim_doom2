@@ -30,14 +30,12 @@ import wad.doomdata
 
 type MenuItem = ref object
     pic: string
-    selected: bool
     subMenu: seq[MenuItem]
     action: proc()
 
-proc newMenuItem(pic: string, subMenu: seq[MenuItem], selected: bool = false, action: proc() = nil): MenuItem =
+proc newMenuItem(pic: string, subMenu: seq[MenuItem] = @[], action: proc() = nil): MenuItem =
     result.new
     result.pic = pic
-    result.selected = selected
     result.subMenu = subMenu
     result.action = action
 
@@ -75,22 +73,22 @@ proc newMenuView*(r: Rect, gameData: DoomData): MenuView =
 
     result.mainMenu = @[
         newMenuItem("M_NGAME",  @[
-            newMenuItem("M_JKILL", @[], true),
-            newMenuItem("M_ROUGH", @[]      ),
-            newMenuItem("M_HURT",  @[]      ),
-            newMenuItem("M_ULTRA", @[]      ),
-            newMenuItem("M_NMARE", @[]      )
-        ], true),
+            newMenuItem("M_JKILL"),
+            newMenuItem("M_ROUGH"),
+            newMenuItem("M_HURT"),
+            newMenuItem("M_ULTRA"),
+            newMenuItem("M_NMARE")
+        ]),
         newMenuItem("M_OPTION", @[
-            newMenuItem("M_ENDGAM", @[], true)
+            newMenuItem("M_ENDGAM")
         ]),
-        newMenuItem("M_LOADG",  @[
-            newMenuItem("M_ENDGAM", @[], true)
+        newMenuItem("M_LOADG", @[
+            newMenuItem("M_ENDGAM")
         ]),
-        newMenuItem("M_SAVEG",  @[
-            newMenuItem("M_ENDGAM", @[], true)
+        newMenuItem("M_SAVEG", @[
+            newMenuItem("M_ENDGAM")
         ]),
-        newMenuItem("M_QUITG",  @[], action = proc() =
+        newMenuItem("M_QUITG", action = proc() =
             echo gameData.exitText.toString()
             quit(0)
         )
