@@ -1,37 +1,40 @@
 import strutils
+import tables
 
 import nimx.button
 import nimx.context
-import nimx.font
 import nimx.event
+import nimx.font
 import nimx.image
 import nimx.keyboard
 import nimx.types
 import nimx.view
 import nimx.window
 
-import rod.rod_types
+import rod.animated_image
+import rod.edit_view
 import rod.node
+import rod.rod_types
 import rod.viewport
 
-import rod.animated_image
 import rod.component
 import rod.component.camera
 import rod.component.sprite
-import rod.edit_view
-
-import tables
-
-import picture
-
-const VIEWPORT_SIZE* = newSize(320, 200)
 
 import wad.doomdata
 
+import picture
+
+
+const
+    VIEWPORT_SIZE = newSize(320, 200)
+
+
 type MenuItem = ref object
-    pic: string
-    subMenu: seq[MenuItem]
-    action: proc()
+    pic:     string         ## Name of picture (LUMP name in *.wad file)
+    subMenu: seq[MenuItem]  ## Current menu item subMenu (empty seq if no submenu)
+    action:  proc()         ## Action to perform (items without subMenus,
+                            ## like 'Quit Game')
 
 proc newMenuItem(pic: string, subMenu: seq[MenuItem] = @[], action: proc() = nil): MenuItem =
     result.new
@@ -39,56 +42,78 @@ proc newMenuItem(pic: string, subMenu: seq[MenuItem] = @[], action: proc() = nil
     result.subMenu = subMenu
     result.action = action
 
+
 type MenuView* = ref object of SceneView
-    mainMenu*: seq[MenuItem]
-    mainMenuRoot*: MenuItem
-    mainMenuCursor: int
-    img*: Image
-    imgpos*: Rect
-    gameData: DoomData
-    cursor*: Node
+    gameData:       DoomData        ## Typed data loaded from *.wad file
+    mainMenu:       seq[MenuItem]   ## General Main menu hierarchical structure
+    mainMenuRoot:   MenuItem        ## Current parent for displayed menu (nil for root)
+    mainMenuCursor: int             ## Current position of 'skull' cursor
+
 
 proc newNodeWithDoomPic(v: MenuView, name: string, parent: Node, pic: string, x: Coord = 0, y: Coord = 0, center: bool = false): Node =
+    ## Create new Rod Engine scene view node with name, attach it to parent,
+    ## and create ROD Sprite node component with picture fetched from *.wad
+    ## file by `pic` - lump name.
+
+    # Add new node
     result = parent.newChild(name)
+
+    # Create static image for sprite from *.wad picture
     let nodeImage = imageWithDoomPicture(v.gameData.pictures[pic], v.gameData.palettes[0])
-    result.translation = newVector3(x + (if center: VIEWPORT_SIZE.width / 2 - nodeImage.size.width / 2 else: 0).Coord, y, 0)
+
+    # Create sprite component for node
     let nodeSprite = result.component(Sprite)
     nodeSprite.image = nodeImage
 
+    # Setup node position
+    result.translation = newVector3(x + (if center: VIEWPORT_SIZE.width / 2 - nodeImage.size.width / 2 else: 0).Coord, y, 0)
+
+
 proc newAnimatedNodeWithDoomPic(v: MenuView, name: string, parent: Node, pics: seq[string], frameRate: int, x: Coord = 0, y: Coord = 0, center: bool = false): Node =
+    ## The same as `newNodeWithDoomPic` but takes sequence of picture in order
+    ## to create animated sprite.
+
+    # Add new node
     result = parent.newChild(name)
+
+    # Create animated image for sprite from *.wad pictures
     var frames: seq[Image] = @[]
     for pic in pics: frames.add(imageWithDoomPicture(v.gameData.pictures[pic], v.gameData.palettes[0]))
     let nodeImage = newAnimatedImageWithImageSeq(frames)
 
+    # Create sprite component for node
     let nodeSprite = result.component(Sprite)
     nodeSprite.image = nodeImage
 
+    # Setup node position, add animation to NimX Window in order to play it
     result.translation = newVector3(x + (if center: VIEWPORT_SIZE.width / 2 - nodeImage.size.width / 2 else: 0).Coord, y, 0)
     result.sceneView().addAnimation(nodeImage.frameAnimation(frameRate))
 
+
 proc newMenuView*(r: Rect, gameData: DoomData): MenuView =
+    # Main Menu View constructor
     result.new
     result.gameData = gameData
 
+    # Create main menu and its submenus structure
     result.mainMenu = @[
-        newMenuItem("M_NGAME",  @[
+        newMenuItem("M_NGAME",  @[                # New Game sub-menu
             newMenuItem("M_JKILL"),
             newMenuItem("M_ROUGH"),
             newMenuItem("M_HURT"),
             newMenuItem("M_ULTRA"),
             newMenuItem("M_NMARE")
         ]),
-        newMenuItem("M_OPTION", @[
+        newMenuItem("M_OPTION", @[                # Options sub-menu
             newMenuItem("M_ENDGAM")
         ]),
-        newMenuItem("M_LOADG", @[
+        newMenuItem("M_LOADG", @[                 # Load Game sub-menu
             newMenuItem("M_ENDGAM")
         ]),
-        newMenuItem("M_SAVEG", @[
+        newMenuItem("M_SAVEG", @[                 # Save Game sub-menu
             newMenuItem("M_ENDGAM")
         ]),
-        newMenuItem("M_QUITG", action = proc() =
+        newMenuItem("M_QUITG", action = proc() =  # Quit Game menu item
             echo gameData.exitText.toString()
             quit(0)
         )
@@ -109,7 +134,7 @@ proc createDoomMenu*(v: MenuView, n: Node, shiftLeft: Coord = 63): Node =
         let itemNode = v.newNodeWithDoomPic(item.pic, result, item.pic, VIEWPORT_SIZE.width / 2 - shiftLeft, y.Coord, false)
         y += itemNode.component(Sprite).image.size.height.Coord + 1
         if index == v.mainMenuCursor:
-            v.cursor = v.newAnimatedNodeWithDoomPic(
+            discard v.newAnimatedNodeWithDoomPic(
                 "Cursor",
                 v.SceneView.rootNode,
                 @["M_SKULL1", "M_SKULL2"], 4,
