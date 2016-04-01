@@ -24,6 +24,7 @@ import rod.component.sprite
 import wad.doomdata
 
 import picture
+import view_play
 
 
 const
@@ -89,16 +90,24 @@ proc newAnimatedNodeWithDoomPic(v: MenuView, name: string, parent: Node, pics: s
     result.translation = newVector3(x + (if center: VIEWPORT_SIZE.width / 2 - nodeImage.size.width / 2 else: 0).Coord, y, 0)
     result.sceneView().addAnimation(nodeImage.frameAnimation(frameRate))
 
+proc runLevel(v: MenuView, level: int) =
+    let levelView = newGameView(v.gameData, level)
+    v.window.addSubView(levelView)
+    v.removeFromSuperview()
 
 proc newMenuView*(r: Rect, gameData: DoomData): MenuView =
     # Main Menu View constructor
     result.new
     result.gameData = gameData
 
+    let v = result
+
     # Create main menu and its submenus structure
     result.mainMenu = @[
         newMenuItem("M_NGAME",  @[                # New Game sub-menu
-            newMenuItem("M_JKILL"),
+            newMenuItem("M_JKILL", action = proc() =
+                runLevel(v, 0)
+            ),
             newMenuItem("M_ROUGH"),
             newMenuItem("M_HURT"),
             newMenuItem("M_ULTRA"),

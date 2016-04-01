@@ -23,14 +23,11 @@ type
         gameData: DoomData
         map: Map
 
-    Thing* = ref object of Component  ## Something interactable on map
-
-    Player* = ref object of Thing     ## Player on map
-
-proc newGameView(gameData: DoomData, levelNumber: int = 0): GameView =
+proc newGameView*(gameData: DoomData, levelNumber: int = 0): GameView =
     result.new
     result.gameData = gameData
     result.map = gameData.maps[levelNumber]
+    result.init(newRect(0, 0, VIEWPORT_SIZE.width, VIEWPORT_SIZE.height))
 
 method init(v: GameView, r: Rect) =
     procCall v.View.init(r)
@@ -51,5 +48,4 @@ method init(v: GameView, r: Rect) =
 method draw(v: GameView, r: Rect) =
     procCall v.SceneView.draw(r)
 
-registerComponent[Thing]()
-registerComponent[Player]()
+    v.rootNode = newNode("root")
